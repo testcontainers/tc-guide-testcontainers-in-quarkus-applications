@@ -1,0 +1,247 @@
+---
+title: "Development and Testing of Quarkus applications using Testcontainers"
+date: 2023-05-24T09:39:58+05:30
+draft: false
+description: This guide will explain how to build and test Quarkus applications using Testcontainers.
+repo: https://github.com/testcontainers/tc-guide-testcontainers-in-quarkus-applications
+languages:
+  - Java
+tags:
+  - quarkus
+  - postgresql
+  - rest-assured
+---
+:toc:
+:toclevels: 2
+:codebase: https://raw.githubusercontent.com/testcontainers/tc-guide-testcontainers-in-quarkus-applications/main
+
+In this guide, you will learn how to
+
+* Create a Quarkus application
+* Implement REST API endpoints using *JAX-RS*, *Hibernate ORM with Panache* and *PostgreSQL*
+* Test the REST API using *Testcontainers* and *RestAssured*.
+
+== Prerequisites
+* Java 17+
+* Your favorite IDE (Intellij IDEA, Eclipse, NetBeans, VS Code)
+* A Docker environment supported by Testcontainers https://www.testcontainers.org/supported_docker_environment/
+
+== What we are going to achieve in this guide
+We are going to create a Quarkus application using Hibernate ORM with Panache together with a Postgres database
+and implement a couple of REST API endpoints. Then we will test these API endpoints using *RestAssured* and *Quarkus Dev Services*,
+which uses *Testcontainers* behind the scenes.
+
+We will also learn how to test your application using the Docker containers that are not supported by Quarkus Dev Services out of the box.
+Finally, we will learn how to run Quarkus applications locally using Dev Services.
+
+== Getting Started
+Create a new Quarkus application from https://code.quarkus.io/ by selecting the *RESTEasy Classic, RESTEasy Classic Jackson,
+Hibernate Validator, Hibernate ORM with Panache, JDBC Driver - PostgreSQL*, and *Flyway* extensions.
+
+We are going to implement two REST API endpoints, one to fetch all the customers and another one to create a new customer.
+We will use *JAX-RS with RESTEasy Classic* to implement API handlers and *Hibernate ORM with Panache* for persistence.
+
+Hibernate ORM with Panache supports the Active Record Pattern and Repository Pattern to simplifyJPA usage.
+In this guide, we will use the Active Record Pattern.
+
+== Create JPA entity
+First, let us start with creating a JPA entity `Customer` by extending the `PanacheEntity` class.
+
+[source,java]
+----
+include::{codebase}/src/main/java/com/testcontainers/demo/Customer.java[]
+----
+
+By extending the `PanacheEntity` class, we will have various persistence methods such as `persist()`, `listAll()`, `findById()` etc.
+available on `Customer` class.
+
+== Create CustomerService CDI Bean
+Create a `CustomerService` class to perform various operations on the `Customer` entity.
+We will mark `CustomerService` as a CDI bean by annotating it with `@ApplicationScoped`
+and also make its public methods to work within a transactional boundary by annotating it with `@Transactional`.
+
+[source,java]
+----
+include::{codebase}/src/main/java/com/testcontainers/demo/CustomerService.java[]
+----
+
+== Add Flyway database migration script
+We are going to use the Flyway database migration tool to perform database migrations.
+
+Create a `V1__init_database.sql` file with the following content under the *src/main/resources/db/migration* directory.
+
+[source,sql]
+----
+include::{codebase}/src/main/resources/db/migration/V1__init_database.sql[]
+----
+
+We also need to enable the execution of flyway migrations by adding the following property in
+the *src/main/resources/application.properties* file.
+
+[source,properties]
+----
+quarkus.flyway.migrate-at-start=true
+----
+
+== Implement REST API endpoints
+Finally, create a `CustomerResource` class to implement a REST API endpoints to fetch all customers and create a new customer as follows:
+
+[source,java]
+----
+include::{codebase}/src/main/java/com/testcontainers/demo/CustomerResource.java[]
+----
+
+== Introducing Quarkus Dev Services
+Quarkus Dev Services supports the automatic provisioning of unconfigured services in development and test mode.
+If we include an extension and don't configure it then Quarkus will automatically start the relevant service,
+usually using https://www.testcontainers.org/[Testcontainers] behind the scenes, and wire up your application to use this service.
+
+[NOTE]
+For Dev Services to work, you need to have a https://www.testcontainers.org/supported_docker_environment/[Supporting Docker environment] available.
+
+Quarkus Dev Services provide support for most commonly used services like SQL databases, Kafka, RabbitMQ, Redis, MongoDB etc.
+
+For more information on Quarkus Dev Services, read https://quarkus.io/guides/dev-services
+
+== Write Tests for API endpoints
+We are going to write tests for the `GET /api/customers`  and `POST /api/customers` API endpoints using RestAssured.
+
+When we generated the application, the *io.rest-assured:rest-assured* library was already added as a *test* dependency.
+
+Now, we can create a `CustomerResourceTest` class and annotate it with `@QuarkusTest` which will bootstrap the application
+along with the required services using Dev Services. As we haven't configured the datasource properties,
+Dev Services will automatically start a PostgreSQL database using Testcontainers.
+
+[source,java]
+----
+include::{codebase}/src/test/java/com/testcontainers/demo/CustomerResourceTest.java[]
+----
+
+Now if you run the test, you should see in the console logs that a Postgres database container is automatically started,
+Flyway migrations are applied, and your tests are executed using that database successfully.
+
+However, you can notice two things here:
+
+1. While tests are running, your application started on port 8081.
+   It would be better to start on a randomly available port so that there won't be any port conflicts.
+2. By default, the Postgres database container is started using a `postgres:14` docker image.
+   You might want to change the docker image tag to use a specific PostgreSQL version.
+
+We can customize both of these behaviors by adding the following properties in *src/main/resources/application.properties* file.
+
+[source,properties]
+----
+quarkus.http.test-port=0
+quarkus.datasource.devservices.image-name=postgres:15.2-alpine
+----
+
+[TIP]
+It is highly recommended to explicitly configure the docker container image versions(tags) to match with the versions of the services
+you are running in production.
+
+Now if you run the test, the Quarkus application will be started on a random available port and the Dev Services
+create a Postgres container based on the `postgres:15.2-alpine` docker image.
+
+== Run tests
+
+[source,shell]
+----
+# If you are using Maven
+./mvnw test
+
+# If you are using Gradle
+./gradlew test
+----
+
+You should see the Postgres docker container is started and all tests should PASS.
+
+== How to test with services not supported by Dev Services?
+
+Your application may be using a service that is not supported by Dev Services out of the box.
+In such cases, you can use `QuarkusTestResource` and `QuarkusTestResourceLifecycleManager` to start the required services
+before the Quarkus application starts for testing.
+
+Let's suppose we are using CockroachDB in our application, and as of now, Dev Services doesn't support CockroachDB out of the box.
+But we can still start and configure CockroachDB using Testcontainers and `QuarkusTestResourceLifecycleManager` automatically before executing the tests.
+
+First, let's add the cockroachdb Testcontainers module dependency.
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.testcontainers</groupId>
+    <artifactId>cockroachdb</artifactId>
+    <version>1.18.1</version>
+    <scope>test</scope>
+</dependency>
+----
+
+Create a `CockroachDBTestResource` by implementing the `QuarkusTestResourceLifecycleManager` interface as follows:
+
+[source,java]
+----
+include::{codebase}/src/test/java/com/testcontainers/demo/CockroachDBTestResource.java[]
+----
+
+Next, we can use the `CockroachDBTestResource` by using `@QuarkusTestResource` as follows:
+
+[source,java]
+----
+include::{codebase}/src/test/java/com/testcontainers/demo/CockroachDBTest.java[]
+----
+
+If you run this test, you can see that the cockroachdb container is started before running the test
+and your application datasource is configured to use the cockroachdb.
+
+By default, test resources are global, which means even if they are defined on a test class or custom profile,
+they will all be activated for all tests. If you want to only enable a test resource on a single test class or test profile,
+you can use `@QuarkusTestResource(restrictToAnnotatedClass = true)`.
+
+So, we have added `restrictToAnnotatedClass = true` attribute to start the cockroachdb only while running this `CockroachDBTest` test class.
+
+== Run application locally
+As mentioned previously, Quarkus Dev Services automatically provision the unconfigured services in development and test mode.
+
+We can start the Quarkus application in dev mode using `./mvnw compile quarkus:dev` or `./gradlew quarkusDev`
+which will automatically start the unconfigured services, Postgres in our case, using Dev Services.
+
+[source,shell]
+----
+# If you are using Maven
+./mvnw compile quarkus:dev
+
+# If you are using Gradle
+./gradlew quarkusDev
+----
+
+If you are running a Postgres database on your system and want to use that database during development,
+you can configure datasource properties in *src/main/resources/application.properties* file as follows:
+
+[source,properties]
+----
+quarkus.datasource.jdbc.url=jdbc:postgresql://localhost:5432/postgres
+quarkus.datasource.username=postgres
+quarkus.datasource.password=postgres
+----
+
+When you explicitly configure these properties, Dev Services will not provision the database container,
+instead it will connect to the database using the configured properties.
+
+== Summary
+Quarkus improved the developer experience greatly with Dev Services by automatically provisioning
+the required services using Testcontainers during development and testing.
+
+We have learned how to implement REST API using JAX-RS together with Hibernate ORM with Panache.
+Then we tested the API endpoints using RestAssured by leveraging the Dev Services.
+We also learned how to use the services that are not yet supported by Dev Services using QuarkusTestResourceLifecycleManager.
+Finally, we learned how to run the application locally using Dev Services and externally installed service as well.
+
+The transparent integration with Testcontainers helped us build and test the Quarkus applications simpler
+without requiring explicit configuration.
+
+To learn more about Testcontainers visit http://testcontainers.com
+
+== Further Reading
+* https://quarkus.io/guides/dev-services[Quarkus Dev Services Overview]
+* https://quarkus.io/guides/getting-started-testing[Quarkus Testing Guide]
+* https://testcontainers.com/guides/testing-spring-boot-rest-api-using-testcontainers/[Getting started with Testcontainers in a Java Spring Boot Project]

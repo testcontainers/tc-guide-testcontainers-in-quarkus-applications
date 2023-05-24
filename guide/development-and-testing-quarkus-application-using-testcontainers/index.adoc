@@ -1,6 +1,6 @@
 ---
 title: "Development and Testing of Quarkus applications using Testcontainers"
-date: 2023-05-24T09:39:58+05:30
+date: 2023-05-23T09:39:58+05:30
 draft: false
 description: This guide will explain how to build and test Quarkus applications using Testcontainers.
 repo: https://github.com/testcontainers/tc-guide-testcontainers-in-quarkus-applications

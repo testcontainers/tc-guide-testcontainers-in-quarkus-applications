@@ -41,7 +41,7 @@ Hibernate Validator, Hibernate ORM with Panache, JDBC Driver - PostgreSQL*, and 
 We are going to implement two REST API endpoints, one to fetch all the customers and another one to create a new customer.
 We will use *JAX-RS with RESTEasy Classic* to implement API handlers and *Hibernate ORM with Panache* for persistence.
 
-Hibernate ORM with Panache supports the Active Record Pattern and Repository Pattern to simplifyJPA usage.
+Hibernate ORM with Panache supports the *Active Record Pattern* and *Repository Pattern* to simplify JPA usage.
 In this guide, we will use the Active Record Pattern.
 
 == Create JPA entity
@@ -236,8 +236,7 @@ Then we tested the API endpoints using RestAssured by leveraging the Dev Service
 We also learned how to use the services that are not yet supported by Dev Services using QuarkusTestResourceLifecycleManager.
 Finally, we learned how to run the application locally using Dev Services and externally installed service as well.
 
-The transparent integration with Testcontainers helped us build and test the Quarkus applications simpler
-without requiring explicit configuration.
+The seamless integration with Testcontainers helped us to build and test the Quarkus applications without requiring explicit configuration.
 
 To learn more about Testcontainers visit http://testcontainers.com
 
